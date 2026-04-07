@@ -1,0 +1,11 @@
+import type { Metadata } from "next";
+import { AuthForm } from "@/components/auth/AuthForm";
+
+export const metadata: Metadata = { title: "Sign In | Freshwell" };
+
+// Prevent static prerendering since AuthForm needs Supabase client
+export const dynamic = "force-dynamic";
+
+export default function LoginPage() {
+  return <AuthForm mode="login" />;
+}

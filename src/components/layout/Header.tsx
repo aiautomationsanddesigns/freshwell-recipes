@@ -5,11 +5,13 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Menu, X, Leaf } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { UserMenu } from "@/components/auth/UserMenu";
 
 const NAV_LINKS = [
   { href: "/foods", label: "Browse Foods" },
   { href: "/recipes", label: "Recipes" },
   { href: "/scanner", label: "Fridge Scanner" },
+  { href: "/saved", label: "Saved" },
 ];
 
 export function Header() {
@@ -44,18 +46,23 @@ export function Header() {
               {link.label}
             </Link>
           ))}
+          <div className="ml-2">
+            <UserMenu />
+          </div>
         </nav>
 
-        {/* Mobile hamburger */}
-        <button
-          onClick={() => setMobileOpen(!mobileOpen)}
-          className="md:hidden rounded-lg p-2 text-gray-600 hover:bg-gray-100 cursor-pointer"
-        >
-          {mobileOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
-        </button>
+        {/* Mobile */}
+        <div className="flex items-center gap-2 md:hidden">
+          <UserMenu />
+          <button
+            onClick={() => setMobileOpen(!mobileOpen)}
+            className="rounded-lg p-2 text-gray-600 hover:bg-gray-100 cursor-pointer"
+          >
+            {mobileOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+          </button>
+        </div>
       </div>
 
-      {/* Mobile nav */}
       {mobileOpen && (
         <div className="md:hidden border-t border-gray-100 bg-white p-4">
           <nav className="flex flex-col gap-1">

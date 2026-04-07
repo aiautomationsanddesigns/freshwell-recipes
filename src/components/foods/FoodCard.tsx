@@ -15,7 +15,7 @@ export function FoodCard({ food, selected, onToggle }: FoodCardProps) {
     <button
       onClick={onToggle}
       className={cn(
-        "relative flex flex-col items-start gap-1 rounded-xl border-2 p-3 text-left transition-all duration-200 w-full cursor-pointer",
+        "relative flex flex-col items-start gap-0.5 rounded-xl border-2 p-2.5 text-left transition-all duration-200 w-full cursor-pointer",
         selected
           ? cn(
               getTrafficLightBorderColor(food.trafficLight),

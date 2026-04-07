@@ -3,6 +3,7 @@
 import { Clock, Users } from "lucide-react";
 import { Modal } from "@/components/ui/Modal";
 import { Badge } from "@/components/ui/Badge";
+import { RecipeActions } from "./RecipeActions";
 import { formatTime, cn, getTrafficLightBgColor } from "@/lib/utils";
 import { TRAFFIC_LIGHT_LABELS } from "@/types";
 import type { Recipe } from "@/types";
@@ -19,6 +20,9 @@ export function RecipeDetail({ recipe, isOpen, onClose }: RecipeDetailProps) {
   return (
     <Modal isOpen={isOpen} onClose={onClose} title={recipe.title} size="lg">
       <div className="p-6 space-y-6">
+        {/* Actions bar */}
+        <RecipeActions recipe={recipe} className="justify-end" />
+
         {/* Header info */}
         <div className="space-y-3">
           <div className="flex flex-wrap items-center gap-3">

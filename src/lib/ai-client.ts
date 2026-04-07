@@ -9,12 +9,12 @@ const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY || "",
 });
 
-export async function generateRecipeWithAI(prompt: string): Promise<string> {
+export async function generateRecipeWithAI(prompt: string, maxTokens: number = 8192): Promise<string> {
   // Try Claude first
   try {
     const response = await anthropic.messages.create({
       model: "claude-sonnet-4-20250514",
-      max_tokens: 4096,
+      max_tokens: maxTokens,
       messages: [{ role: "user", content: prompt }],
     });
     const textBlock = response.content.find((b) => b.type === "text");
@@ -32,7 +32,7 @@ export async function generateRecipeWithAI(prompt: string): Promise<string> {
     const response = await openai.chat.completions.create({
       model: "gpt-4o",
       messages: [{ role: "user", content: prompt }],
-      max_tokens: 4096,
+      max_tokens: maxTokens,
     });
     const text = response.choices[0]?.message?.content;
     if (text) {

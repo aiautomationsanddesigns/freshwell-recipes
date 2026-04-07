@@ -1,29 +1,41 @@
 import { NextRequest, NextResponse } from "next/server";
 import { FOOD_BY_ID } from "@/lib/foods-data";
 import { generateRecipeWithAI } from "@/lib/ai-client";
-import { buildRecipePrompt } from "@/lib/prompts";
+import { buildRecipePrompt, buildMealPlanPrompt, buildDayRegenerationPrompt } from "@/lib/prompts";
 import { generateId } from "@/lib/utils";
-import type { MealType, Recipe } from "@/types";
+import type { MealType, Recipe, RecipePreferences, GenerationMode, MealPlanDay, FoodItem } from "@/types";
 
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { foodIds, mealTypes } = body as {
+    const {
+      foodIds,
+      mealTypes,
+      mode = "recipes",
+      preferences,
+      count = 10,
+      regenerateDay,
+      existingMealTitles,
+    } = body as {
       foodIds: string[];
-      mealTypes: MealType[];
+      mealTypes?: MealType[];
+      mode?: GenerationMode;
+      preferences?: RecipePreferences;
+      count?: number;
+      regenerateDay?: { dayNumber: number; dayName: string };
+      existingMealTitles?: string[];
     };
 
-    if (!foodIds?.length || !mealTypes?.length) {
+    if (!foodIds?.length) {
       return NextResponse.json(
-        { error: "Please select at least one food and one meal type." },
+        { error: "Please select at least one food." },
         { status: 400 }
       );
     }
 
-    // Look up food items
     const foods = foodIds
       .map((id: string) => FOOD_BY_ID.get(id))
-      .filter(Boolean);
+      .filter(Boolean) as FoodItem[];
 
     if (foods.length === 0) {
       return NextResponse.json(
@@ -32,39 +44,83 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Build prompt and generate
-    const prompt = buildRecipePrompt(foods as any[], mealTypes);
-    const rawResponse = await generateRecipeWithAI(prompt);
+    const prefs: RecipePreferences = preferences || {
+      cuisineStyles: [],
+      cookTime: null,
+      difficulty: null,
+      dietaryFilters: [],
+    };
 
-    // Parse the AI response
-    let recipes: Recipe[];
-    try {
-      // Try direct parse
-      const parsed = JSON.parse(rawResponse);
-      recipes = Array.isArray(parsed) ? parsed : [parsed];
-    } catch {
-      // Try to extract JSON from markdown-wrapped response
-      const jsonMatch = rawResponse.match(/\[[\s\S]*\]/);
-      if (jsonMatch) {
-        recipes = JSON.parse(jsonMatch[0]);
-      } else {
-        const objMatch = rawResponse.match(/\{[\s\S]*\}/);
-        if (objMatch) {
-          recipes = [JSON.parse(objMatch[0])];
-        } else {
-          return NextResponse.json(
-            { error: "Failed to parse recipe response. Please try again.", raw: rawResponse },
-            { status: 500 }
-          );
-        }
+    // Regenerate a single day in a meal plan
+    if (regenerateDay) {
+      const prompt = buildDayRegenerationPrompt(
+        foods,
+        prefs,
+        regenerateDay.dayName,
+        existingMealTitles || []
+      );
+      const rawResponse = await generateRecipeWithAI(prompt, 4096);
+      const parsed = parseJSON(rawResponse);
+      if (parsed && parsed.lunch && parsed.dinner) {
+        parsed.lunch.id = generateId();
+        parsed.dinner.id = generateId();
+        return NextResponse.json({
+          day: {
+            day: regenerateDay.dayNumber,
+            dayName: regenerateDay.dayName,
+            lunch: parsed.lunch,
+            dinner: parsed.dinner,
+          },
+        });
       }
+      return NextResponse.json(
+        { error: "Failed to parse day regeneration response." },
+        { status: 500 }
+      );
     }
 
-    // Add IDs to recipes
-    recipes = recipes.map((r) => ({
-      ...r,
-      id: generateId(),
-    }));
+    // Meal plan mode
+    if (mode === "meal-plan") {
+      const prompt = buildMealPlanPrompt(foods, prefs);
+      const rawResponse = await generateRecipeWithAI(prompt, 16384);
+      let days: MealPlanDay[];
+      try {
+        const parsed = parseJSONArray(rawResponse);
+        days = parsed.map((d: MealPlanDay) => ({
+          ...d,
+          lunch: d.lunch ? { ...d.lunch, id: generateId() } : null,
+          dinner: d.dinner ? { ...d.dinner, id: generateId() } : null,
+        }));
+      } catch {
+        return NextResponse.json(
+          { error: "Failed to parse meal plan response. Please try again." },
+          { status: 500 }
+        );
+      }
+      return NextResponse.json({ mealPlan: { days } });
+    }
+
+    // Standard recipes mode
+    if (!mealTypes?.length) {
+      return NextResponse.json(
+        { error: "Please select at least one meal type." },
+        { status: 400 }
+      );
+    }
+
+    const prompt = buildRecipePrompt(foods, mealTypes, prefs, count);
+    const rawResponse = await generateRecipeWithAI(prompt, count > 5 ? 16384 : 8192);
+
+    let recipes: Recipe[];
+    try {
+      const parsed = parseJSONArray(rawResponse);
+      recipes = parsed.map((r: Recipe) => ({ ...r, id: generateId() }));
+    } catch {
+      return NextResponse.json(
+        { error: "Failed to parse recipe response. Please try again." },
+        { status: 500 }
+      );
+    }
 
     return NextResponse.json({ recipes });
   } catch (error) {
@@ -73,5 +129,40 @@ export async function POST(request: NextRequest) {
       { error: error instanceof Error ? error.message : "An unexpected error occurred." },
       { status: 500 }
     );
+  }
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function parseJSON(raw: string): Record<string, any> | null {
+  try {
+    return JSON.parse(raw);
+  } catch {
+    const match = raw.match(/\{[\s\S]*\}/);
+    if (match) {
+      try {
+        return JSON.parse(match[0]);
+      } catch {
+        return null;
+      }
+    }
+    return null;
+  }
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function parseJSONArray(raw: string): any[] {
+  try {
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [parsed];
+  } catch {
+    const match = raw.match(/\[[\s\S]*\]/);
+    if (match) {
+      return JSON.parse(match[0]);
+    }
+    const objMatch = raw.match(/\{[\s\S]*\}/);
+    if (objMatch) {
+      return [JSON.parse(objMatch[0])];
+    }
+    throw new Error("Could not extract JSON from response");
   }
 }
