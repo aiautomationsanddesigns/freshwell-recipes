@@ -223,7 +223,14 @@ function RecipePageInner() {
         )}
 
         {/* Loading */}
-        {isLoading && <RecipeLoadingSkeleton />}
+        {isLoading && (
+          <RecipeLoadingSkeleton
+            message={mode === "meal-plan"
+              ? "Generating your 7-day meal plan (14 meals)..."
+              : "Generating 10 recipes in parallel batches..."
+            }
+          />
+        )}
 
         {/* Meal Plan Results */}
         {mode === "meal-plan" && mealPlanDays.length > 0 && !isLoading && (

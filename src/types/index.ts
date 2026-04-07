@@ -92,13 +92,17 @@ export type DietaryFilter =
   | "vegetarian"
   | "vegan"
   | "dairy-free"
-  | "nut-free";
+  | "nut-free"
+  | "gluten-free";
+
+export type TrafficLightOnly = "green-only" | "green-amber" | "all";
 
 export interface RecipePreferences {
   cuisineStyles: CuisineStyle[];
   cookTime: CookTimeRange | null;
   difficulty: DifficultyLevel | null;
   dietaryFilters: DietaryFilter[];
+  trafficLightOnly: TrafficLightOnly;
 }
 
 export type GenerationMode = "recipes" | "meal-plan";
@@ -193,6 +197,13 @@ export const DIETARY_LABELS: Record<DietaryFilter, string> = {
   vegan: "Vegan",
   "dairy-free": "Dairy Free",
   "nut-free": "Nut Free",
+  "gluten-free": "Gluten Free",
+};
+
+export const TRAFFIC_LIGHT_ONLY_LABELS: Record<TrafficLightOnly, string> = {
+  "green-only": "Green Only",
+  "green-amber": "Green + Amber",
+  all: "All Foods",
 };
 
 export const DEFAULT_PREFERENCES: RecipePreferences = {
@@ -200,4 +211,5 @@ export const DEFAULT_PREFERENCES: RecipePreferences = {
   cookTime: null,
   difficulty: null,
   dietaryFilters: [],
+  trafficLightOnly: "all",
 };

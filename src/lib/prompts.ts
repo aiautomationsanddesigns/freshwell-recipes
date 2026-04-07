@@ -30,7 +30,13 @@ export function buildRecipePrompt(
     if (preferences.dietaryFilters.includes("vegan")) dietRules.push("NO animal products at all - use vegetables, nuts, seeds, legumes, and plant oils only");
     if (preferences.dietaryFilters.includes("dairy-free")) dietRules.push("NO dairy products (no butter, cream, cheese, yogurt, milk) - use olive oil/coconut oil instead");
     if (preferences.dietaryFilters.includes("nut-free")) dietRules.push("NO nuts or nut-based ingredients");
+    if (preferences.dietaryFilters.includes("gluten-free")) dietRules.push("NO gluten-containing ingredients (no wheat, barley, rye, oats unless certified gluten-free, no soy sauce - use tamari instead)");
     preferencesSection += `\nDIETARY REQUIREMENTS:\n${dietRules.map((r) => `- ${r}`).join("\n")}`;
+  }
+  if (preferences.trafficLightOnly === "green-only") {
+    preferencesSection += `\nSTRICT GREEN ONLY: Use ONLY green-rated ingredients. NO amber or red foods at all. All ingredients must be from the green category.`;
+  } else if (preferences.trafficLightOnly === "green-amber") {
+    preferencesSection += `\nGREEN + AMBER ONLY: Use green and amber ingredients only. NO red foods. Amber foods can be used freely in this mode.`;
   }
 
   return `You are a recipe generator for the Freshwell Low Carb program, a UK-based healthy eating system.

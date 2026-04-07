@@ -52,9 +52,9 @@ export function FilterBar({
 
   return (
     <div ref={panelRef} className="sticky top-16 z-20 bg-white/95 backdrop-blur-lg border-b border-gray-100 shadow-sm">
-      <div className="mx-auto max-w-7xl px-4 sm:px-6 py-3">
+      <div className="mx-auto max-w-7xl px-4 sm:px-6 py-2.5">
         {/* Single row: search + filters button + clear */}
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2">
           <SearchInput
             value={searchQuery}
             onChange={onSearchChange}
@@ -62,10 +62,10 @@ export function FilterBar({
           />
           <button
             onClick={() => setExpanded(!expanded)}
-            className="flex items-center gap-1.5 rounded-xl px-3.5 py-2.5 text-sm font-medium text-gray-600 hover:bg-gray-100 border border-gray-200 transition-colors cursor-pointer whitespace-nowrap"
+            className="flex items-center gap-1.5 rounded-xl px-3 py-2 text-sm font-medium text-gray-600 hover:bg-gray-100 border border-gray-200 transition-colors cursor-pointer whitespace-nowrap"
           >
             <SlidersHorizontal className="h-4 w-4" />
-            Filters
+            <span className="hidden sm:inline">Filters</span>
             {activeCount > 0 && (
               <span className="flex h-5 w-5 items-center justify-center rounded-full bg-emerald-600 text-white text-xs font-bold">
                 {activeCount}
@@ -76,35 +76,42 @@ export function FilterBar({
           {hasActiveFilters && (
             <button
               onClick={onClearAll}
-              className="flex items-center gap-1.5 rounded-xl px-3 py-2.5 text-sm font-medium text-red-600 hover:bg-red-50 transition-colors cursor-pointer whitespace-nowrap"
+              className="rounded-xl p-2 text-red-500 hover:bg-red-50 transition-colors cursor-pointer"
+              title="Clear all filters"
             >
               <FilterX className="h-4 w-4" />
-              <span className="hidden sm:inline">Clear</span>
             </button>
           )}
         </div>
       </div>
 
-      {/* Filter dropdown panel - overlays content */}
+      {/* Compact filter dropdown - inline chips, not large sections */}
       {expanded && (
-        <div className="absolute top-full left-0 right-0 bg-white border-b border-gray-200 shadow-lg z-30">
-          <div className="mx-auto max-w-7xl px-4 sm:px-6 py-4 space-y-4">
-            <div>
-              <p className="text-xs font-medium text-gray-500 uppercase tracking-wider mb-2">Traffic Light</p>
+        <div className="absolute top-full left-0 right-0 bg-white border-b border-gray-200 shadow-lg z-30 max-h-[50vh] overflow-y-auto">
+          <div className="mx-auto max-w-7xl px-4 sm:px-6 py-3 space-y-2.5">
+            {/* Traffic light - inline row */}
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-xs font-semibold text-gray-400 uppercase tracking-wider w-16 flex-shrink-0">Light</span>
               <TrafficLightFilter active={trafficLights} onToggle={onToggleTrafficLight} />
             </div>
-            <div>
-              <p className="text-xs font-medium text-gray-500 uppercase tracking-wider mb-2">Food Type</p>
-              <CategoryFilter active={categories} onToggle={onToggleCategory} />
+            {/* Category - inline row */}
+            <div className="flex items-start gap-2 flex-wrap">
+              <span className="text-xs font-semibold text-gray-400 uppercase tracking-wider w-16 flex-shrink-0 pt-2">Type</span>
+              <div className="flex-1">
+                <CategoryFilter active={categories} onToggle={onToggleCategory} />
+              </div>
             </div>
+            {/* Subcategory - only when categories selected */}
             {categories.length > 0 && (
-              <div>
-                <p className="text-xs font-medium text-gray-500 uppercase tracking-wider mb-2">Subcategory</p>
-                <SubcategoryFilter
-                  activeCategories={categories}
-                  activeSubcategories={subcategories}
-                  onToggle={onToggleSubcategory}
-                />
+              <div className="flex items-start gap-2 flex-wrap">
+                <span className="text-xs font-semibold text-gray-400 uppercase tracking-wider w-16 flex-shrink-0 pt-2">Sub</span>
+                <div className="flex-1">
+                  <SubcategoryFilter
+                    activeCategories={categories}
+                    activeSubcategories={subcategories}
+                    onToggle={onToggleSubcategory}
+                  />
+                </div>
               </div>
             )}
           </div>

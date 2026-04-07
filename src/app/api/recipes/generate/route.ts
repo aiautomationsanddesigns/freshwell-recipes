@@ -49,6 +49,7 @@ export async function POST(request: NextRequest) {
       cookTime: null,
       difficulty: null,
       dietaryFilters: [],
+      trafficLightOnly: "all" as const,
     };
 
     // Regenerate a single day in a meal plan
@@ -108,18 +109,35 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const prompt = buildRecipePrompt(foods, mealTypes, prefs, count);
-    const rawResponse = await generateRecipeWithAI(prompt, count > 5 ? 16384 : 8192);
+    // Generate in 2 parallel batches of 5 for speed
+    const batchSize = Math.ceil(count / 2);
+    const batch1Count = batchSize;
+    const batch2Count = count - batchSize;
 
-    let recipes: Recipe[];
+    const [raw1, raw2] = await Promise.all([
+      generateRecipeWithAI(buildRecipePrompt(foods, mealTypes, prefs, batch1Count), 8192),
+      generateRecipeWithAI(buildRecipePrompt(foods, mealTypes, prefs, batch2Count), 8192),
+    ]);
+
+    let recipes: Recipe[] = [];
     try {
-      const parsed = parseJSONArray(rawResponse);
-      recipes = parsed.map((r: Recipe) => ({ ...r, id: generateId() }));
+      const parsed1 = parseJSONArray(raw1);
+      const parsed2 = parseJSONArray(raw2);
+      recipes = [...parsed1, ...parsed2].map((r: Recipe) => ({ ...r, id: generateId() }));
     } catch {
-      return NextResponse.json(
-        { error: "Failed to parse recipe response. Please try again." },
-        { status: 500 }
-      );
+      // If one batch fails, try to use the other
+      try {
+        recipes = parseJSONArray(raw1).map((r: Recipe) => ({ ...r, id: generateId() }));
+      } catch {
+        try {
+          recipes = parseJSONArray(raw2).map((r: Recipe) => ({ ...r, id: generateId() }));
+        } catch {
+          return NextResponse.json(
+            { error: "Failed to parse recipe response. Please try again." },
+            { status: 500 }
+          );
+        }
+      }
     }
 
     return NextResponse.json({ recipes });

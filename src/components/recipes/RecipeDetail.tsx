@@ -1,8 +1,11 @@
 "use client";
 
-import { Clock, Users } from "lucide-react";
+import { useState } from "react";
+import { Clock, Users, ImageIcon } from "lucide-react";
 import { Modal } from "@/components/ui/Modal";
 import { Badge } from "@/components/ui/Badge";
+import { Button } from "@/components/ui/Button";
+import { Spinner } from "@/components/ui/Spinner";
 import { RecipeActions } from "./RecipeActions";
 import { formatTime, cn, getTrafficLightBgColor } from "@/lib/utils";
 import { TRAFFIC_LIGHT_LABELS } from "@/types";
@@ -15,13 +18,60 @@ interface RecipeDetailProps {
 }
 
 export function RecipeDetail({ recipe, isOpen, onClose }: RecipeDetailProps) {
+  const [imageUrl, setImageUrl] = useState<string | null>(null);
+  const [imageLoading, setImageLoading] = useState(false);
+  const [imageError, setImageError] = useState<string | null>(null);
+
   if (!recipe) return null;
+
+  const generateImage = async () => {
+    setImageLoading(true);
+    setImageError(null);
+    try {
+      const res = await fetch("/api/recipes/image", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title: recipe.title,
+          description: recipe.description,
+          ingredients: recipe.ingredients,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+      setImageUrl(data.imageUrl);
+    } catch (err) {
+      setImageError(err instanceof Error ? err.message : "Failed to generate image");
+    } finally {
+      setImageLoading(false);
+    }
+  };
 
   return (
     <Modal isOpen={isOpen} onClose={onClose} title={recipe.title} size="lg">
       <div className="p-6 space-y-6">
         {/* Actions bar */}
         <RecipeActions recipe={recipe} className="justify-end" />
+
+        {/* AI Image */}
+        {imageUrl ? (
+          <img src={imageUrl} alt={recipe.title} className="w-full h-64 object-cover rounded-xl" />
+        ) : (
+          <div className="flex items-center gap-3">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={generateImage}
+              loading={imageLoading}
+              disabled={imageLoading}
+            >
+              <ImageIcon className="h-4 w-4" />
+              {imageLoading ? "Generating image..." : "Generate Image"}
+            </Button>
+            {imageLoading && <span className="text-xs text-gray-400">~10 seconds</span>}
+            {imageError && <span className="text-xs text-red-500">{imageError}</span>}
+          </div>
+        )}
 
         {/* Header info */}
         <div className="space-y-3">

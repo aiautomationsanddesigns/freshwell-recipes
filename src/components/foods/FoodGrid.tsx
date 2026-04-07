@@ -10,6 +10,8 @@ interface FoodGridProps {
   foods: FoodItem[];
   selectedFoods: Set<string>;
   onToggleFood: (id: string) => void;
+  favourites: Set<string>;
+  onToggleFavourite: (id: string) => void;
 }
 
 const CATEGORY_ORDER: FoodCategory[] = [
@@ -18,7 +20,7 @@ const CATEGORY_ORDER: FoodCategory[] = [
   "grains-starch", "sweets-snacks", "processed",
 ];
 
-export function FoodGrid({ foods, selectedFoods, onToggleFood }: FoodGridProps) {
+export function FoodGrid({ foods, selectedFoods, onToggleFood, favourites, onToggleFavourite }: FoodGridProps) {
   if (foods.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center gap-3 py-20 text-gray-400">
@@ -36,7 +38,7 @@ export function FoodGrid({ foods, selectedFoods, onToggleFood }: FoodGridProps) 
     <div className="space-y-8">
       {orderedCategories.map((category) => (
         <section key={category}>
-          <div className="sticky top-[4.5rem] z-10 flex items-center gap-2 bg-gray-50/95 backdrop-blur-sm py-2 px-1 -mx-1 mb-3">
+          <div className="sticky top-[4rem] z-10 flex items-center gap-2 bg-gray-50/95 backdrop-blur-sm py-2 px-1 -mx-1 mb-3">
             <h3 className="text-sm font-semibold text-gray-700 uppercase tracking-wide">
               {CATEGORY_LABELS[category]}
             </h3>
@@ -51,6 +53,8 @@ export function FoodGrid({ foods, selectedFoods, onToggleFood }: FoodGridProps) 
                 food={food}
                 selected={selectedFoods.has(food.id)}
                 onToggle={() => onToggleFood(food.id)}
+                isFavourite={favourites.has(food.id)}
+                onToggleFavourite={() => onToggleFavourite(food.id)}
               />
             ))}
           </div>
