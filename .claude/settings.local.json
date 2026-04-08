@@ -3,7 +3,9 @@
     "allow": [
       "Bash(echo {\"\"name\"\":\"\"freshwell\"\"})",
       "Bash(npx create-next-app@latest . --typescript --tailwind --app --src-dir --eslint --use-npm --import-alias @/* --yes)",
-      "mcp__Claude_Preview__preview_start"
+      "mcp__Claude_Preview__preview_start",
+      "Bash(node -e \":*)",
+      "Bash(npx next:*)"
     ]
   }
 }

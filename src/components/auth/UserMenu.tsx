@@ -2,11 +2,11 @@
 
 import { useState, useRef, useEffect } from "react";
 import Link from "next/link";
-import { User, LogOut, Heart, ChevronDown } from "lucide-react";
+import { User, LogOut, Heart, ChevronDown, Shield } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 
 export function UserMenu() {
-  const { user, loading, signOut } = useAuth();
+  const { user, loading, signOut, isAdmin } = useAuth();
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
@@ -40,8 +40,9 @@ export function UserMenu() {
         className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-gray-600 hover:bg-gray-100 transition-colors cursor-pointer"
       >
         <div className="flex h-7 w-7 items-center justify-center rounded-full bg-emerald-100 text-emerald-600">
-          <User className="h-3.5 w-3.5" />
+          {isAdmin ? <Shield className="h-3.5 w-3.5" /> : <User className="h-3.5 w-3.5" />}
         </div>
+        {isAdmin && <span className="text-xs font-bold text-emerald-600 hidden sm:inline">Admin</span>}
         <ChevronDown className="h-3.5 w-3.5" />
       </button>
 
@@ -49,6 +50,11 @@ export function UserMenu() {
         <div className="absolute right-0 top-full mt-1 w-56 rounded-xl border border-gray-200 bg-white shadow-lg py-1 z-50">
           <div className="px-4 py-2 border-b border-gray-100">
             <p className="text-xs text-gray-500 truncate">{user.email}</p>
+            {isAdmin && (
+              <span className="inline-flex items-center gap-1 mt-1 text-[10px] font-bold text-emerald-600 bg-emerald-50 rounded-full px-2 py-0.5">
+                <Shield className="h-3 w-3" /> Admin
+              </span>
+            )}
           </div>
           <Link
             href="/saved"

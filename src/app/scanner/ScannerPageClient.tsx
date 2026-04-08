@@ -2,13 +2,15 @@
 
 import { useState, useCallback } from "react";
 import Link from "next/link";
-import { ScanLine, RefreshCw, ChefHat, Plus, ImagePlus } from "lucide-react";
+import { ScanLine, RefreshCw, ChefHat, ImagePlus } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { Spinner } from "@/components/ui/Spinner";
 import { ScannerTabs } from "@/components/scanner/ScannerTabs";
 import { ScanResults } from "@/components/scanner/ScanResults";
 import type { ScannedItem } from "@/types";
-import { FOOD_DATABASE } from "@/lib/foods-data";
+import { FOOD_DATABASE, FOOD_BY_ID } from "@/lib/foods-data";
+
+const MAX_PHOTOS = 5;
 
 export function ScannerPageClient() {
   const [previews, setPreviews] = useState<string[]>([]);
@@ -42,25 +44,33 @@ export function ScannerPageClient() {
     try {
       const newItems = await analyzeImage(file);
 
-      // Merge with existing results (avoid duplicates)
+      // Merge with existing results (avoid duplicates, upgrade confidence)
       setScanResults((prev) => {
         const existingNames = new Set(prev.map((i) => i.name.toLowerCase()));
         const uniqueNew = newItems.filter((i) => !existingNames.has(i.name.toLowerCase()));
-        // Also update uncertain items if new scan has higher confidence
+        // Update uncertain items if new scan has higher confidence
         const updated = prev.map((existing) => {
           const better = newItems.find(
             (n) => n.name.toLowerCase() === existing.name.toLowerCase() && n.confidence > existing.confidence
           );
-          return better ? { ...existing, confidence: better.confidence, matchedFoodId: better.matchedFoodId || existing.matchedFoodId, trafficLight: better.trafficLight || existing.trafficLight } : existing;
+          return better ? {
+            ...existing,
+            confidence: better.confidence,
+            matchedFoodId: better.matchedFoodId || existing.matchedFoodId,
+            trafficLight: better.trafficLight || existing.trafficLight,
+          } : existing;
         });
         return [...updated, ...uniqueNew];
       });
 
-      // Auto-select newly matched items
-      const matched = newItems
-        .filter((item) => item.matchedFoodId && item.confidence >= 0.6)
-        .map((item) => item.matchedFoodId as string);
-      setSelectedItems((prev) => new Set([...prev, ...matched]));
+      // Auto-select newly matched items with good confidence
+      setSelectedItems((prev) => {
+        const matched = newItems
+          .filter((item) => item.matchedFoodId && item.confidence >= 0.6)
+          .map((item) => item.matchedFoodId as string);
+        return new Set([...prev, ...matched]);
+      });
+
       setHasScanned(true);
       setShowAddMore(false);
     } catch (err) {
@@ -107,7 +117,7 @@ export function ScannerPageClient() {
     setScanResults((prev) => {
       const updated = [...prev];
       const old = updated[index];
-      // Try to match new name against food database
+      if (!old) return prev;
       const match = FOOD_DATABASE.find(
         (f) => f.name.toLowerCase() === newName.toLowerCase() ||
           f.name.toLowerCase().includes(newName.toLowerCase()) ||
@@ -116,16 +126,34 @@ export function ScannerPageClient() {
       updated[index] = {
         ...old,
         name: newName,
-        matchedFoodId: match?.id || old.matchedFoodId,
-        trafficLight: match?.trafficLight || old.trafficLight,
+        matchedFoodId: match?.id || undefined,
+        trafficLight: match?.trafficLight || undefined,
         confidence: match ? Math.max(old.confidence, 0.8) : old.confidence,
       };
-      // Auto-select if matched
       if (match) {
         setSelectedItems((sel) => new Set([...sel, match.id]));
       }
       return updated;
     });
+  }, []);
+
+  const classifyItem = useCallback((index: number, foodId: string) => {
+    const food = FOOD_BY_ID.get(foodId);
+    if (!food) return;
+    setScanResults((prev) => {
+      const updated = [...prev];
+      const old = updated[index];
+      if (!old) return prev;
+      updated[index] = {
+        ...old,
+        name: food.name,
+        matchedFoodId: food.id,
+        trafficLight: food.trafficLight,
+        confidence: 1.0, // User confirmed
+      };
+      return updated;
+    });
+    setSelectedItems((prev) => new Set([...prev, foodId]));
   }, []);
 
   const requestBetterPhoto = useCallback((itemName: string) => {
@@ -137,6 +165,8 @@ export function ScannerPageClient() {
     scanResults.some((item) => item.matchedFoodId === id)
   );
 
+  const canAddMore = previews.length < MAX_PHOTOS;
+
   return (
     <div className="min-h-screen bg-gray-50">
       <main className="mx-auto max-w-2xl px-4 sm:px-6 py-8 space-y-6">
@@ -147,27 +177,34 @@ export function ScannerPageClient() {
           </div>
           <h1 className="text-2xl font-bold text-gray-900">Fridge Scanner</h1>
           <p className="text-sm text-gray-500 max-w-md mx-auto">
-            Take photos of your fridge or food items. AI identifies ingredients
+            Take up to {MAX_PHOTOS} photos of your fridge or food items. AI identifies ingredients
             and suggests Freshwell-compliant recipes.
           </p>
         </div>
 
-        {/* Image previews */}
+        {/* Photo thumbnails + count */}
         {previews.length > 0 && (
-          <div className="flex gap-2 overflow-x-auto pb-2">
-            {previews.map((p, i) => (
-              <img key={i} src={p} alt={`Scan ${i + 1}`} className="h-20 w-20 rounded-xl object-cover border border-gray-200 flex-shrink-0" />
-            ))}
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                Photos ({previews.length}/{MAX_PHOTOS})
+              </p>
+            </div>
+            <div className="flex gap-2 overflow-x-auto pb-1">
+              {previews.map((p, i) => (
+                <img key={i} src={p} alt={`Scan ${i + 1}`} className="h-16 w-16 rounded-lg object-cover border border-gray-200 flex-shrink-0" />
+              ))}
+            </div>
           </div>
         )}
 
         {/* Better photo request banner */}
         {betterPhotoRequest && (
-          <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800 flex items-start gap-3">
+          <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800 flex items-start gap-3">
             <ScanLine className="h-5 w-5 flex-shrink-0 mt-0.5" />
             <div>
-              <p className="font-medium">Better photo needed for: &ldquo;{betterPhotoRequest}&rdquo;</p>
-              <p className="text-xs text-amber-600 mt-1">Take a closer, clearer photo of this item. The AI will combine results from all your photos.</p>
+              <p className="font-medium">Better photo needed: &ldquo;{betterPhotoRequest}&rdquo;</p>
+              <p className="text-xs text-amber-600 mt-0.5">Take a closer photo. Results from all photos are combined.</p>
             </div>
           </div>
         )}
@@ -181,14 +218,13 @@ export function ScannerPageClient() {
           />
         )}
 
-        {/* Scanning state */}
+        {/* Scanning indicator (results stay visible) */}
         {isScanning && (
-          <div className="flex flex-col items-center gap-3 py-6">
-            <Spinner size="lg" className="text-emerald-600" />
-            <p className="text-sm font-medium text-gray-600">
-              {previews.length > 1 ? "Analyzing additional photo..." : "Analyzing your fridge..."}
+          <div className="flex items-center gap-3 rounded-xl bg-emerald-50 border border-emerald-100 px-4 py-3">
+            <Spinner size="sm" className="text-emerald-600" />
+            <p className="text-sm font-medium text-emerald-700">
+              {previews.length > 1 ? "Analyzing additional photo and merging results..." : "Analyzing your fridge..."}
             </p>
-            <p className="text-xs text-gray-400">This may take a few seconds</p>
           </div>
         )}
 
@@ -197,45 +233,50 @@ export function ScannerPageClient() {
           <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
             {error}
             <button onClick={handleClearAll} className="ml-2 underline hover:no-underline cursor-pointer">
-              Try again
+              Start over
             </button>
           </div>
         )}
 
-        {/* Results */}
-        {hasScanned && !isScanning && (
-          <>
-            <ScanResults
-              items={scanResults}
-              selectedItems={selectedItems}
-              onToggleItem={toggleItem}
-              onDeleteItem={deleteItem}
-              onEditItem={editItem}
-              onRequestBetterPhoto={requestBetterPhoto}
-            />
+        {/* Results - ALWAYS visible once we have them, even during scanning */}
+        {hasScanned && scanResults.length > 0 && (
+          <ScanResults
+            items={scanResults}
+            selectedItems={selectedItems}
+            onToggleItem={toggleItem}
+            onDeleteItem={deleteItem}
+            onEditItem={editItem}
+            onClassifyItem={classifyItem}
+          />
+        )}
 
-            {/* Actions */}
-            <div className="flex flex-wrap gap-3">
-              {!showAddMore && (
-                <Button variant="outline" onClick={() => setShowAddMore(true)}>
-                  <ImagePlus className="h-4 w-4" />
-                  Add Another Photo
-                </Button>
-              )}
-              <Button variant="outline" onClick={handleClearAll}>
-                <RefreshCw className="h-4 w-4" />
-                Start Over
+        {/* Actions */}
+        {hasScanned && !isScanning && (
+          <div className="flex flex-wrap gap-3">
+            {canAddMore && !showAddMore && (
+              <Button variant="outline" onClick={() => setShowAddMore(true)}>
+                <ImagePlus className="h-4 w-4" />
+                Add Photo ({previews.length}/{MAX_PHOTOS})
               </Button>
-              {matchedFoodIds.length > 0 && (
-                <Link href={`/recipes?foods=${matchedFoodIds.join(",")}`}>
-                  <Button>
-                    <ChefHat className="h-4 w-4" />
-                    Generate Recipes ({matchedFoodIds.length} items)
-                  </Button>
-                </Link>
-              )}
-            </div>
-          </>
+            )}
+            {!canAddMore && (
+              <span className="flex items-center text-xs text-gray-400 px-3 py-2">
+                Max {MAX_PHOTOS} photos reached
+              </span>
+            )}
+            <Button variant="outline" onClick={handleClearAll}>
+              <RefreshCw className="h-4 w-4" />
+              Start Over
+            </Button>
+            {matchedFoodIds.length > 0 && (
+              <Link href={`/recipes?foods=${matchedFoodIds.join(",")}`}>
+                <Button>
+                  <ChefHat className="h-4 w-4" />
+                  Generate Recipes ({matchedFoodIds.length} items)
+                </Button>
+              </Link>
+            )}
+          </div>
         )}
       </main>
     </div>

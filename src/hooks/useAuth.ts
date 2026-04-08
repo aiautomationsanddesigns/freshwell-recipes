@@ -39,5 +39,7 @@ export function useAuth() {
     setUser(null);
   }, []);
 
-  return { user, loading, signOut };
+  const isAdmin = user?.app_metadata?.role === "admin";
+
+  return { user, loading, signOut, isAdmin };
 }
