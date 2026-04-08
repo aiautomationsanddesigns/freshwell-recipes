@@ -140,6 +140,33 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // Validate recipes: flag any that use ingredients not in the user's selection
+    const selectedNames = new Set(foods.map((f) => (f as FoodItem).name.toLowerCase()));
+    const allowedBasics = new Set(["salt", "pepper", "black pepper", "herbs", "fresh herbs", "dried herbs", "dried herbs & spices", "spices", "olive oil", "extra virgin olive oil", "butter", "garlic", "stock", "stock cubes", "vinegar", "water"]);
+
+    recipes = recipes.map((r: Recipe) => {
+      const flagged = (r.ingredients || []).some((ing) => {
+        const name = (ing.name || "").toLowerCase();
+        // Allow basic seasonings
+        if (allowedBasics.has(name)) return false;
+        // Allow if any selected food name is a substring match
+        for (const sel of selectedNames) {
+          if (name.includes(sel) || sel.includes(name)) return false;
+        }
+        return true;
+      });
+      return { ...r, _hasUnselectedIngredients: flagged };
+    });
+
+    // Sort: recipes using only selected ingredients first
+    recipes.sort((a, b) => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const aFlag = (a as any)._hasUnselectedIngredients ? 1 : 0;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const bFlag = (b as any)._hasUnselectedIngredients ? 1 : 0;
+      return aFlag - bFlag;
+    });
+
     return NextResponse.json({ recipes });
   } catch (error) {
     console.error("[API] Recipe generation failed:", error);

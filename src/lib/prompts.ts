@@ -53,9 +53,13 @@ ${preferencesSection}
 
 TASK: Generate exactly ${count} diverse recipes for: ${mealTypeStr}
 
-You may add basic Freshwell-approved green ingredients (salt, pepper, herbs, spices, olive oil, butter) even if not in the list above.
-NEVER use any RED foods (bread, pasta, rice, potatoes, sugar, flour, cereals, seed oils).
-Use AMBER foods sparingly and note when they're amber.
+CRITICAL INGREDIENT RULES:
+- The MAIN ingredients of each recipe MUST come from the AVAILABLE INGREDIENTS list above.
+- You may ONLY add these basic seasonings/cooking aids: salt, pepper, herbs (fresh or dried), spices, olive oil, butter, garlic, stock cubes, vinegar.
+- Do NOT add any protein, fish, meat, dairy, vegetables, fruit, or nuts that are NOT in the available ingredients list.
+- For example: if tuna is NOT listed above, do NOT include tuna in any recipe. If chicken is NOT listed, do NOT include chicken.
+- NEVER use any RED foods (bread, pasta, rice, potatoes, sugar, flour, cereals, seed oils).
+- Use AMBER foods sparingly and note when they're amber.
 
 Return ONLY a valid JSON array with no markdown formatting, no code fences. Each recipe:
 [
