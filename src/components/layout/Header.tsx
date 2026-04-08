@@ -10,7 +10,8 @@ import { UserMenu } from "@/components/auth/UserMenu";
 const NAV_LINKS = [
   { href: "/foods", label: "Browse Foods" },
   { href: "/recipes", label: "Recipes" },
-  { href: "/scanner", label: "Fridge Scanner" },
+  { href: "/scanner", label: "Scanner" },
+  { href: "/guide", label: "Guide" },
   { href: "/saved", label: "Saved" },
 ];
 

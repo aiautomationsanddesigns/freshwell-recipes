@@ -4,7 +4,7 @@ import { groupByCategory } from "@/lib/utils";
 import { CATEGORY_LABELS } from "@/types";
 import type { FoodItem, FoodCategory } from "@/types";
 import { FoodCard } from "./FoodCard";
-import { PackageOpen } from "lucide-react";
+import { PackageOpen, Star } from "lucide-react";
 
 interface FoodGridProps {
   foods: FoodItem[];
@@ -12,6 +12,7 @@ interface FoodGridProps {
   onToggleFood: (id: string) => void;
   favourites: Set<string>;
   onToggleFavourite: (id: string) => void;
+  onToggleHidden: (id: string) => void;
 }
 
 const CATEGORY_ORDER: FoodCategory[] = [
@@ -20,7 +21,7 @@ const CATEGORY_ORDER: FoodCategory[] = [
   "grains-starch", "sweets-snacks", "processed",
 ];
 
-export function FoodGrid({ foods, selectedFoods, onToggleFood, favourites, onToggleFavourite }: FoodGridProps) {
+export function FoodGrid({ foods, selectedFoods, onToggleFood, favourites, onToggleFavourite, onToggleHidden }: FoodGridProps) {
   if (foods.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center gap-3 py-20 text-gray-400">
@@ -31,11 +32,44 @@ export function FoodGrid({ foods, selectedFoods, onToggleFood, favourites, onTog
     );
   }
 
-  const grouped = groupByCategory(foods);
+  // Split into favourites and regular
+  const favouriteFoods = foods.filter((f) => favourites.has(f.id));
+  const regularFoods = foods.filter((f) => !favourites.has(f.id));
+
+  const grouped = groupByCategory(regularFoods);
   const orderedCategories = CATEGORY_ORDER.filter((cat) => grouped[cat]?.length > 0);
 
   return (
     <div className="space-y-8">
+      {/* Favourites section at top */}
+      {favouriteFoods.length > 0 && (
+        <section>
+          <div className="sticky top-[4rem] z-10 flex items-center gap-2 bg-gray-50/95 backdrop-blur-sm py-2 px-1 -mx-1 mb-3">
+            <Star className="h-4 w-4 text-amber-500 fill-amber-500" />
+            <h3 className="text-sm font-semibold text-amber-700 uppercase tracking-wide">
+              Your Favourites
+            </h3>
+            <span className="text-xs text-amber-500 bg-amber-100 rounded-full px-2 py-0.5">
+              {favouriteFoods.length}
+            </span>
+          </div>
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2.5">
+            {favouriteFoods.map((food) => (
+              <FoodCard
+                key={food.id}
+                food={food}
+                selected={selectedFoods.has(food.id)}
+                onToggle={() => onToggleFood(food.id)}
+                isFavourite={true}
+                onToggleFavourite={() => onToggleFavourite(food.id)}
+                onToggleHidden={() => onToggleHidden(food.id)}
+              />
+            ))}
+          </div>
+        </section>
+      )}
+
+      {/* Regular categories */}
       {orderedCategories.map((category) => (
         <section key={category}>
           <div className="sticky top-[4rem] z-10 flex items-center gap-2 bg-gray-50/95 backdrop-blur-sm py-2 px-1 -mx-1 mb-3">
@@ -53,8 +87,9 @@ export function FoodGrid({ foods, selectedFoods, onToggleFood, favourites, onTog
                 food={food}
                 selected={selectedFoods.has(food.id)}
                 onToggle={() => onToggleFood(food.id)}
-                isFavourite={favourites.has(food.id)}
+                isFavourite={false}
                 onToggleFavourite={() => onToggleFavourite(food.id)}
+                onToggleHidden={() => onToggleHidden(food.id)}
               />
             ))}
           </div>
