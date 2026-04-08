@@ -62,8 +62,12 @@ function RecipePageInner() {
     setRemovedRecipeIds((prev) => new Set([...prev, id]));
   }, []);
 
-  const generateRecipes = useCallback(async () => {
+  const [warning, setWarning] = useState<string | null>(null);
+  const [showFewIngredientsConfirm, setShowFewIngredientsConfirm] = useState(false);
+
+  const doGenerate = useCallback(async () => {
     setError(null);
+    setWarning(null);
     setIsLoading(true);
     try {
       const res = await fetch("/api/recipes/generate", {
@@ -80,10 +84,11 @@ function RecipePageInner() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed to generate recipes");
 
+      if (data.warning) setWarning(data.warning);
+
       if (mode === "meal-plan" && data.mealPlan) {
         setMealPlanDays(data.mealPlan.days || []);
       } else if (data.recipes) {
-        // APPEND to existing recipes, don't replace
         setRecipes((prev) => [...prev, ...data.recipes]);
       }
       setHasGenerated(true);
@@ -93,6 +98,15 @@ function RecipePageInner() {
       setIsLoading(false);
     }
   }, [foodIds, mealTypes, mode, preferences]);
+
+  const generateRecipes = useCallback(async () => {
+    // Check for too few ingredients
+    if (foodIds.length < 3) {
+      setShowFewIngredientsConfirm(true);
+      return;
+    }
+    doGenerate();
+  }, [foodIds.length, doGenerate]);
 
   const regenerateDay = useCallback(async (dayNumber: number) => {
     setRegeneratingDay(dayNumber);
@@ -224,6 +238,34 @@ function RecipePageInner() {
             )}
           </Button>
         </div>
+
+        {/* Few ingredients confirmation */}
+        {showFewIngredientsConfirm && (
+          <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 space-y-3">
+            <p className="text-sm font-medium text-amber-800">
+              You&apos;ve only selected {foodIds.length} ingredient{foodIds.length !== 1 ? "s" : ""}. Recipes work best with at least 3-4 ingredients.
+            </p>
+            <p className="text-xs text-amber-600">
+              With fewer ingredients, recipes may be very simple or repetitive. Consider adding more foods from the browser.
+            </p>
+            <div className="flex gap-3">
+              <Button size="sm" onClick={() => { setShowFewIngredientsConfirm(false); doGenerate(); }}>
+                Generate Anyway
+              </Button>
+              <Link href="/foods">
+                <Button size="sm" variant="outline">Add More Ingredients</Button>
+              </Link>
+              <button onClick={() => setShowFewIngredientsConfirm(false)} className="text-sm text-gray-500 hover:text-gray-700 cursor-pointer">Cancel</button>
+            </div>
+          </div>
+        )}
+
+        {/* Warning */}
+        {warning && (
+          <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-700">
+            {warning}
+          </div>
+        )}
 
         {/* Error */}
         {error && (

@@ -53,13 +53,14 @@ ${preferencesSection}
 
 TASK: Generate exactly ${count} diverse recipes for: ${mealTypeStr}
 
-CRITICAL INGREDIENT RULES:
-- The MAIN ingredients of each recipe MUST come from the AVAILABLE INGREDIENTS list above.
-- You may ONLY add these basic seasonings/cooking aids: salt, pepper, herbs (fresh or dried), spices, olive oil, butter, garlic, stock cubes, vinegar.
-- Do NOT add any protein, fish, meat, dairy, vegetables, fruit, or nuts that are NOT in the available ingredients list.
-- For example: if tuna is NOT listed above, do NOT include tuna in any recipe. If chicken is NOT listed, do NOT include chicken.
-- NEVER use any RED foods (bread, pasta, rice, potatoes, sugar, flour, cereals, seed oils).
-- Use AMBER foods sparingly and note when they're amber.
+ABSOLUTE INGREDIENT RULES (MUST FOLLOW - recipes that break these will be rejected):
+1. EVERY recipe MUST only use ingredients from the AVAILABLE INGREDIENTS list above.
+2. The ONLY exceptions are: salt, pepper, herbs, spices, olive oil, butter, garlic, stock cubes, vinegar, lemon juice, mustard.
+3. You MUST NOT add ANY protein (meat, fish, eggs), dairy (cheese, cream, milk, yogurt), vegetables, fruit, or nuts that are NOT explicitly listed in AVAILABLE INGREDIENTS above.
+4. READ THE LIST CAREFULLY. If "tuna" is NOT listed, do NOT use tuna. If "eggs" is NOT listed, do NOT use eggs. If "chicken" is NOT listed, do NOT use chicken.
+5. NEVER use RED foods (bread, pasta, rice, potatoes, sugar, flour, cereals, seed oils).
+6. Only use AMBER foods if they appear in the AVAILABLE INGREDIENTS list above.
+7. If there are very few ingredients available, create SIMPLE recipes that use what IS available. It is better to have a 3-ingredient recipe than to invent ingredients the user doesn't have.
 
 Return ONLY a valid JSON array with no markdown formatting, no code fences. Each recipe:
 [

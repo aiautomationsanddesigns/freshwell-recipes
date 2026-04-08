@@ -140,34 +140,59 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Validate recipes: flag any that use ingredients not in the user's selection
+    // STRICT VALIDATION: Remove recipes that use main ingredients not in the user's selection
     const selectedNames = new Set(foods.map((f) => (f as FoodItem).name.toLowerCase()));
-    const allowedBasics = new Set(["salt", "pepper", "black pepper", "herbs", "fresh herbs", "dried herbs", "dried herbs & spices", "spices", "olive oil", "extra virgin olive oil", "butter", "garlic", "stock", "stock cubes", "vinegar", "water"]);
+    // Also add subcategories and common variants for matching
+    foods.forEach((f) => {
+      const food = f as FoodItem;
+      selectedNames.add(food.name.toLowerCase());
+      // Add singular/partial matches: "chicken breast" -> also match "chicken"
+      const words = food.name.toLowerCase().split(/\s+/);
+      if (words.length > 1) words.forEach((w) => { if (w.length > 3) selectedNames.add(w); });
+    });
 
-    recipes = recipes.map((r: Recipe) => {
-      const flagged = (r.ingredients || []).some((ing) => {
-        const name = (ing.name || "").toLowerCase();
-        // Allow basic seasonings
+    const allowedBasics = new Set([
+      "salt", "pepper", "black pepper", "white pepper", "sea salt",
+      "herbs", "fresh herbs", "dried herbs", "dried herbs & spices", "mixed herbs",
+      "spices", "cumin", "paprika", "turmeric", "chilli", "chili", "cayenne", "cinnamon", "nutmeg", "oregano", "thyme", "rosemary", "basil", "parsley", "coriander", "dill", "mint", "bay leaf", "bay leaves",
+      "olive oil", "extra virgin olive oil",
+      "butter",
+      "garlic", "ginger",
+      "stock", "stock cubes", "chicken stock", "beef stock", "vegetable stock", "bone broth",
+      "vinegar", "apple cider vinegar", "wine vinegar", "balsamic vinegar",
+      "water", "boiling water",
+      "lemon juice", "lime juice",
+      "mustard", "soy sauce", "tamari", "worcestershire sauce",
+      "coconut oil",
+    ]);
+
+    const validRecipes = recipes.filter((r: Recipe) => {
+      const badIngredients = (r.ingredients || []).filter((ing) => {
+        const name = (ing.name || "").toLowerCase().trim();
+        // Allow basic seasonings/cooking aids
         if (allowedBasics.has(name)) return false;
-        // Allow if any selected food name is a substring match
+        // Check each word of the ingredient against allowed basics
+        const ingWords = name.split(/\s+/);
+        if (ingWords.some((w) => allowedBasics.has(w))) return false;
+        // Allow if any selected food name matches (substring)
         for (const sel of selectedNames) {
           if (name.includes(sel) || sel.includes(name)) return false;
         }
-        return true;
+        return true; // This ingredient wasn't selected
       });
-      return { ...r, _hasUnselectedIngredients: flagged };
+      // Recipe is valid if no bad main ingredients
+      return badIngredients.length === 0;
     });
 
-    // Sort: recipes using only selected ingredients first
-    recipes.sort((a, b) => {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const aFlag = (a as any)._hasUnselectedIngredients ? 1 : 0;
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const bFlag = (b as any)._hasUnselectedIngredients ? 1 : 0;
-      return aFlag - bFlag;
-    });
+    // If strict filtering removed too many, fall back to all recipes with a warning
+    if (validRecipes.length === 0) {
+      return NextResponse.json({
+        recipes,
+        warning: "Some recipes may include ingredients you didn't select. The AI was asked to only use your ingredients but couldn't generate enough matching recipes."
+      });
+    }
 
-    return NextResponse.json({ recipes });
+    return NextResponse.json({ recipes: validRecipes });
   } catch (error) {
     console.error("[API] Recipe generation failed:", error);
     return NextResponse.json(

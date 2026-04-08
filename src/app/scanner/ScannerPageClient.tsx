@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import Link from "next/link";
 import { ScanLine, RefreshCw, ChefHat, Plus, Camera, Upload } from "lucide-react";
 import { Button } from "@/components/ui/Button";
@@ -10,6 +10,25 @@ import type { ScannedItem } from "@/types";
 import { FOOD_DATABASE, FOOD_BY_ID } from "@/lib/foods-data";
 
 const MAX_PHOTOS = 5;
+const SCANNER_STATE_KEY = "freshwell-scanner-state";
+
+interface ScannerState {
+  previews: string[];
+  scanResults: ScannedItem[];
+  selectedItems: string[];
+  hasScanned: boolean;
+}
+
+function saveScannerState(state: ScannerState) {
+  try { sessionStorage.setItem(SCANNER_STATE_KEY, JSON.stringify(state)); } catch { /* ignore */ }
+}
+
+function loadScannerState(): ScannerState | null {
+  try {
+    const stored = sessionStorage.getItem(SCANNER_STATE_KEY);
+    return stored ? JSON.parse(stored) : null;
+  } catch { return null; }
+}
 
 export function ScannerPageClient() {
   const [previews, setPreviews] = useState<string[]>([]);
@@ -22,6 +41,29 @@ export function ScannerPageClient() {
   const [showManualAdd, setShowManualAdd] = useState(false);
   const [manualAddSearch, setManualAddSearch] = useState("");
 
+  // Restore state from sessionStorage on mount
+  useEffect(() => {
+    const saved = loadScannerState();
+    if (saved && saved.hasScanned) {
+      setPreviews(saved.previews);
+      setScanResults(saved.scanResults);
+      setSelectedItems(new Set(saved.selectedItems));
+      setHasScanned(saved.hasScanned);
+    }
+  }, []);
+
+  // Save state to sessionStorage whenever it changes
+  useEffect(() => {
+    if (hasScanned) {
+      saveScannerState({
+        previews,
+        scanResults,
+        selectedItems: [...selectedItems],
+        hasScanned,
+      });
+    }
+  }, [previews, scanResults, selectedItems, hasScanned]);
+
   const analyzeImage = useCallback(async (file: File): Promise<ScannedItem[]> => {
     const formData = new FormData();
     formData.append("image", file);
@@ -33,8 +75,15 @@ export function ScannerPageClient() {
 
   const handleImageSelect = useCallback(async (file: File) => {
     if (previews.length >= MAX_PHOTOS) return;
-    const newPreview = URL.createObjectURL(file);
-    setPreviews((prev) => [...prev, newPreview]);
+
+    // Convert to base64 data URL for persistence (blob URLs don't survive navigation)
+    const reader = new FileReader();
+    reader.onload = () => {
+      const dataUrl = reader.result as string;
+      setPreviews((prev) => [...prev, dataUrl]);
+    };
+    reader.readAsDataURL(file);
+
     setError(null);
     setBetterPhotoRequest(null);
     setIsScanning(true);
@@ -66,6 +115,7 @@ export function ScannerPageClient() {
   const handleClearAll = useCallback(() => {
     setPreviews([]); setScanResults([]); setSelectedItems(new Set());
     setError(null); setHasScanned(false); setBetterPhotoRequest(null); setShowManualAdd(false);
+    try { sessionStorage.removeItem(SCANNER_STATE_KEY); } catch { /* ignore */ }
   }, []);
 
   const toggleItem = useCallback((id: string) => {
@@ -108,13 +158,10 @@ export function ScannerPageClient() {
   const addManualItem = useCallback((foodId: string) => {
     const food = FOOD_BY_ID.get(foodId);
     if (!food) return;
-    // Don't add duplicates
     if (scanResults.some((r) => r.matchedFoodId === foodId)) return;
     setScanResults((prev) => [...prev, { name: food.name, confidence: 1.0, matchedFoodId: food.id, trafficLight: food.trafficLight }]);
     setSelectedItems((prev) => new Set([...prev, foodId]));
-    setManualAddSearch("");
-    setShowManualAdd(false);
-    setHasScanned(true);
+    setManualAddSearch(""); setShowManualAdd(false); setHasScanned(true);
   }, [scanResults]);
 
   const matchedFoodIds = [...selectedItems].filter((id) => scanResults.some((item) => item.matchedFoodId === id));
@@ -148,7 +195,7 @@ export function ScannerPageClient() {
           </div>
         )}
 
-        {/* Better photo request banner */}
+        {/* Better photo request */}
         {betterPhotoRequest && (
           <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800 flex items-start gap-3">
             <ScanLine className="h-5 w-5 flex-shrink-0 mt-0.5" />
@@ -159,53 +206,32 @@ export function ScannerPageClient() {
           </div>
         )}
 
-        {/* Upload / Camera - ALWAYS visible when under max photos */}
+        {/* Upload / Camera - always visible when under limit */}
         {canAddMore && (
           <div className="flex gap-3">
             <label className="flex-1 flex items-center justify-center gap-2 rounded-xl border-2 border-dashed border-gray-300 bg-white py-4 text-sm font-medium text-gray-600 hover:border-emerald-400 hover:bg-emerald-50/50 hover:text-emerald-700 transition-all cursor-pointer">
               <Upload className="h-4 w-4" />
               Upload Photo
-              <input
-                type="file"
-                accept="image/jpeg,image/png,image/webp"
-                multiple
-                className="hidden"
-                onChange={(e) => {
-                  const files = Array.from(e.target.files || []);
-                  const remaining = MAX_PHOTOS - previews.length;
-                  files.slice(0, remaining).forEach((file) => handleImageSelect(file));
-                  e.target.value = "";
-                }}
+              <input type="file" accept="image/jpeg,image/png,image/webp" multiple className="hidden"
+                onChange={(e) => { const files = Array.from(e.target.files || []); files.slice(0, MAX_PHOTOS - previews.length).forEach((file) => handleImageSelect(file)); e.target.value = ""; }}
               />
             </label>
             <label className="flex-1 flex items-center justify-center gap-2 rounded-xl border-2 border-dashed border-gray-300 bg-white py-4 text-sm font-medium text-gray-600 hover:border-emerald-400 hover:bg-emerald-50/50 hover:text-emerald-700 transition-all cursor-pointer">
               <Camera className="h-4 w-4" />
               Take Photo
-              <input
-                type="file"
-                accept="image/*"
-                capture="environment"
-                className="hidden"
-                onChange={(e) => {
-                  const file = e.target.files?.[0];
-                  if (file) handleImageSelect(file);
-                  e.target.value = "";
-                }}
+              <input type="file" accept="image/*" capture="environment" className="hidden"
+                onChange={(e) => { const file = e.target.files?.[0]; if (file) handleImageSelect(file); e.target.value = ""; }}
               />
             </label>
           </div>
         )}
-        {!canAddMore && (
-          <p className="text-xs text-center text-gray-400">Maximum {MAX_PHOTOS} photos reached</p>
-        )}
+        {!canAddMore && <p className="text-xs text-center text-gray-400">Maximum {MAX_PHOTOS} photos reached</p>}
 
-        {/* Scanning indicator */}
+        {/* Scanning */}
         {isScanning && (
           <div className="flex items-center gap-3 rounded-xl bg-emerald-50 border border-emerald-100 px-4 py-3">
             <Spinner size="sm" className="text-emerald-600" />
-            <p className="text-sm font-medium text-emerald-700">
-              {previews.length > 1 ? "Analyzing and merging results..." : "Analyzing your photo..."}
-            </p>
+            <p className="text-sm font-medium text-emerald-700">{previews.length > 1 ? "Analyzing and merging results..." : "Analyzing your photo..."}</p>
           </div>
         )}
 
@@ -219,37 +245,21 @@ export function ScannerPageClient() {
 
         {/* Results */}
         {hasScanned && scanResults.length > 0 && (
-          <ScanResults
-            items={scanResults}
-            selectedItems={selectedItems}
-            onToggleItem={toggleItem}
-            onDeleteItem={deleteItem}
-            onEditItem={editItem}
-            onClassifyItem={classifyItem}
-          />
+          <ScanResults items={scanResults} selectedItems={selectedItems} onToggleItem={toggleItem} onDeleteItem={deleteItem} onEditItem={editItem} onClassifyItem={classifyItem} />
         )}
 
-        {/* Manual add item */}
+        {/* Manual add */}
         {hasScanned && (
           <div className="space-y-2">
             {!showManualAdd ? (
-              <button
-                onClick={() => setShowManualAdd(true)}
-                className="flex items-center gap-2 text-sm font-medium text-emerald-600 hover:text-emerald-700 cursor-pointer"
-              >
-                <Plus className="h-4 w-4" />
-                Add item manually
+              <button onClick={() => setShowManualAdd(true)} className="flex items-center gap-2 text-sm font-medium text-emerald-600 hover:text-emerald-700 cursor-pointer">
+                <Plus className="h-4 w-4" /> Add item manually
               </button>
             ) : (
               <div className="rounded-xl border border-emerald-200 bg-emerald-50/50 p-3 space-y-2">
                 <div className="flex items-center gap-2">
-                  <input
-                    type="text"
-                    placeholder="Search foods to add..."
-                    value={manualAddSearch}
-                    onChange={(e) => setManualAddSearch(e.target.value)}
-                    className="flex-1 rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
-                    autoFocus
+                  <input type="text" placeholder="Search foods to add..." value={manualAddSearch} onChange={(e) => setManualAddSearch(e.target.value)}
+                    className="flex-1 rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/20" autoFocus
                   />
                   <button onClick={() => { setShowManualAdd(false); setManualAddSearch(""); }} className="text-gray-400 hover:text-gray-600 cursor-pointer p-1">
                     <ScanLine className="h-4 w-4" />
@@ -258,11 +268,8 @@ export function ScannerPageClient() {
                 {manualSuggestions.length > 0 && (
                   <div className="flex flex-wrap gap-1.5">
                     {manualSuggestions.map((food) => (
-                      <button
-                        key={food.id}
-                        onClick={() => addManualItem(food.id)}
-                        className="rounded-lg bg-white border border-gray-200 px-2.5 py-1 text-xs font-medium text-gray-700 hover:bg-emerald-100 hover:text-emerald-700 hover:border-emerald-300 cursor-pointer transition-colors"
-                      >
+                      <button key={food.id} onClick={() => addManualItem(food.id)}
+                        className="rounded-lg bg-white border border-gray-200 px-2.5 py-1 text-xs font-medium text-gray-700 hover:bg-emerald-100 hover:text-emerald-700 hover:border-emerald-300 cursor-pointer transition-colors">
                         {food.name}
                       </button>
                     ))}
@@ -277,14 +284,12 @@ export function ScannerPageClient() {
         {hasScanned && !isScanning && (
           <div className="flex flex-wrap gap-3">
             <Button variant="outline" onClick={handleClearAll}>
-              <RefreshCw className="h-4 w-4" />
-              Start Over
+              <RefreshCw className="h-4 w-4" /> Start Over
             </Button>
             {matchedFoodIds.length > 0 && (
               <Link href={`/recipes?foods=${matchedFoodIds.join(",")}&from=scanner`}>
                 <Button>
-                  <ChefHat className="h-4 w-4" />
-                  Generate Recipes ({matchedFoodIds.length} items)
+                  <ChefHat className="h-4 w-4" /> Generate Recipes ({matchedFoodIds.length} items)
                 </Button>
               </Link>
             )}
