@@ -92,6 +92,7 @@ export const FOOD_DATABASE: FoodItem[] = [
   { id: "spring-onions", name: "Spring Onions", category: "vegetables", subcategory: "Alliums", trafficLight: "green" },
   { id: "leeks", name: "Leeks", category: "vegetables", subcategory: "Alliums", trafficLight: "green" },
   { id: "avocado", name: "Avocado", category: "vegetables", subcategory: "Other Veg", trafficLight: "green" },
+  { id: "olives", name: "Olives", category: "vegetables", subcategory: "Other Veg", trafficLight: "green" },
   { id: "radishes", name: "Radishes", category: "vegetables", subcategory: "Root Veg", trafficLight: "green" },
   { id: "mange-tout", name: "Mange Tout", category: "vegetables", subcategory: "Beans", trafficLight: "green" },
 

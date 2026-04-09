@@ -11,6 +11,7 @@ import { FOOD_DATABASE, FOOD_BY_ID } from "@/lib/foods-data";
 
 const MAX_PHOTOS = 5;
 const SCANNER_STATE_KEY = "freshwell-scanner-state";
+const THUMBNAIL_MAX_DIM = 300; // Max width/height for stored thumbnails
 
 interface ScannerState {
   previews: string[];
@@ -20,7 +21,15 @@ interface ScannerState {
 }
 
 function saveScannerState(state: ScannerState) {
-  try { sessionStorage.setItem(SCANNER_STATE_KEY, JSON.stringify(state)); } catch { /* ignore */ }
+  try {
+    sessionStorage.setItem(SCANNER_STATE_KEY, JSON.stringify(state));
+  } catch (e) {
+    // Quota exceeded - save without previews
+    try {
+      sessionStorage.setItem(SCANNER_STATE_KEY, JSON.stringify({ ...state, previews: [] }));
+    } catch { /* ignore */ }
+    console.warn("Scanner state save failed:", e);
+  }
 }
 
 function loadScannerState(): ScannerState | null {
@@ -28,6 +37,36 @@ function loadScannerState(): ScannerState | null {
     const stored = sessionStorage.getItem(SCANNER_STATE_KEY);
     return stored ? JSON.parse(stored) : null;
   } catch { return null; }
+}
+
+// Compress image to a thumbnail data URL for sessionStorage
+function fileToThumbnail(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement("canvas");
+        let { width, height } = img;
+        // Scale down while maintaining aspect ratio
+        if (width > height) {
+          if (width > THUMBNAIL_MAX_DIM) { height = (height * THUMBNAIL_MAX_DIM) / width; width = THUMBNAIL_MAX_DIM; }
+        } else {
+          if (height > THUMBNAIL_MAX_DIM) { width = (width * THUMBNAIL_MAX_DIM) / height; height = THUMBNAIL_MAX_DIM; }
+        }
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext("2d");
+        if (!ctx) return reject(new Error("Canvas context failed"));
+        ctx.drawImage(img, 0, 0, width, height);
+        resolve(canvas.toDataURL("image/jpeg", 0.7));
+      };
+      img.onerror = reject;
+      img.src = e.target?.result as string;
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
 }
 
 export function ScannerPageClient() {
@@ -40,20 +79,23 @@ export function ScannerPageClient() {
   const [betterPhotoRequest, setBetterPhotoRequest] = useState<string | null>(null);
   const [showManualAdd, setShowManualAdd] = useState(false);
   const [manualAddSearch, setManualAddSearch] = useState("");
+  const [stateLoaded, setStateLoaded] = useState(false);
 
   // Restore state from sessionStorage on mount
   useEffect(() => {
     const saved = loadScannerState();
     if (saved && saved.hasScanned) {
-      setPreviews(saved.previews);
-      setScanResults(saved.scanResults);
-      setSelectedItems(new Set(saved.selectedItems));
+      setPreviews(saved.previews || []);
+      setScanResults(saved.scanResults || []);
+      setSelectedItems(new Set(saved.selectedItems || []));
       setHasScanned(saved.hasScanned);
     }
+    setStateLoaded(true);
   }, []);
 
-  // Save state to sessionStorage whenever it changes
+  // Save state whenever it changes (after initial load)
   useEffect(() => {
+    if (!stateLoaded) return;
     if (hasScanned) {
       saveScannerState({
         previews,
@@ -62,7 +104,7 @@ export function ScannerPageClient() {
         hasScanned,
       });
     }
-  }, [previews, scanResults, selectedItems, hasScanned]);
+  }, [previews, scanResults, selectedItems, hasScanned, stateLoaded]);
 
   const analyzeImage = useCallback(async (file: File): Promise<ScannedItem[]> => {
     const formData = new FormData();
@@ -76,19 +118,18 @@ export function ScannerPageClient() {
   const handleImageSelect = useCallback(async (file: File) => {
     if (previews.length >= MAX_PHOTOS) return;
 
-    // Convert to base64 data URL for persistence (blob URLs don't survive navigation)
-    const reader = new FileReader();
-    reader.onload = () => {
-      const dataUrl = reader.result as string;
-      setPreviews((prev) => [...prev, dataUrl]);
-    };
-    reader.readAsDataURL(file);
-
     setError(null);
     setBetterPhotoRequest(null);
     setIsScanning(true);
+
     try {
+      // Compress to thumbnail FIRST for persistent storage
+      const thumbnail = await fileToThumbnail(file);
+      setPreviews((prev) => [...prev, thumbnail]);
+
+      // Now analyze the original file
       const newItems = await analyzeImage(file);
+
       setScanResults((prev) => {
         const existingNames = new Set(prev.map((i) => i.name.toLowerCase()));
         const uniqueNew = newItems.filter((i) => !existingNames.has(i.name.toLowerCase()));
@@ -195,7 +236,6 @@ export function ScannerPageClient() {
           </div>
         )}
 
-        {/* Better photo request */}
         {betterPhotoRequest && (
           <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800 flex items-start gap-3">
             <ScanLine className="h-5 w-5 flex-shrink-0 mt-0.5" />
@@ -206,7 +246,6 @@ export function ScannerPageClient() {
           </div>
         )}
 
-        {/* Upload / Camera - always visible when under limit */}
         {canAddMore && (
           <div className="flex gap-3">
             <label className="flex-1 flex items-center justify-center gap-2 rounded-xl border-2 border-dashed border-gray-300 bg-white py-4 text-sm font-medium text-gray-600 hover:border-emerald-400 hover:bg-emerald-50/50 hover:text-emerald-700 transition-all cursor-pointer">
@@ -227,7 +266,6 @@ export function ScannerPageClient() {
         )}
         {!canAddMore && <p className="text-xs text-center text-gray-400">Maximum {MAX_PHOTOS} photos reached</p>}
 
-        {/* Scanning */}
         {isScanning && (
           <div className="flex items-center gap-3 rounded-xl bg-emerald-50 border border-emerald-100 px-4 py-3">
             <Spinner size="sm" className="text-emerald-600" />
@@ -235,7 +273,6 @@ export function ScannerPageClient() {
           </div>
         )}
 
-        {/* Error */}
         {error && (
           <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
             {error}
@@ -243,12 +280,10 @@ export function ScannerPageClient() {
           </div>
         )}
 
-        {/* Results */}
         {hasScanned && scanResults.length > 0 && (
           <ScanResults items={scanResults} selectedItems={selectedItems} onToggleItem={toggleItem} onDeleteItem={deleteItem} onEditItem={editItem} onClassifyItem={classifyItem} />
         )}
 
-        {/* Manual add */}
         {hasScanned && (
           <div className="space-y-2">
             {!showManualAdd ? (
@@ -280,7 +315,6 @@ export function ScannerPageClient() {
           </div>
         )}
 
-        {/* Actions */}
         {hasScanned && !isScanning && (
           <div className="flex flex-wrap gap-3">
             <Button variant="outline" onClick={handleClearAll}>
